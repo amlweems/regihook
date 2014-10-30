@@ -11,7 +11,7 @@ class UTexasSemesterNotFound(Exception): pass
 class UTexas:
     
     url = {
-        "logon": "https://utdirect.utexas.edu/security-443/logon_check.logonform",
+        "logon": "https://login.utexas.edu/openam/UI/Login",
         "registration": "https://utdirect.utexas.edu/registration/registration.WBX",
         "semester": "https://utdirect.utexas.edu/registration/chooseSemester.WBX",
     }
@@ -31,9 +31,10 @@ class UTexas:
 
     def get_nonce(self, url):
         resp = self.session.get(url)
-        nonce_re = re.findall('name="s_nonce" value="([^"]+)"', resp.text)
-        if nonce_re:
-            self.nonce = nonce_re[0]
+        soup = BeautifulSoup(resp.content)
+        nonce = soup.find_all('input', {'name':'s_nonce'})
+        if nonce:
+            self.nonce = nonce[0].get('value')
 
     def get_semester(self, season):
         url = self.url["semester"]
@@ -55,16 +56,23 @@ class UTexas:
     def login(self):
         url = self.url["logon"]
         data = {
-            "CDT": self.get_cdt(),
-            "LOGON": self.auth["username"],
-            "PASSWORDS": self.auth["password"],
+            "IDToken1": self.auth["username"],
+            "IDToken2": self.auth["password"],
+            "goto": self.url["registration"],
         }
-        self.session.get(url, verify=False)
         resp = self.session.post(url, data=data, verify=False)
-        authenticated = not(resp.cookies.get('FC') is None
-            or resp.cookies.get('FC') is 'NONE')
-        if not authenticated:
-            raise UTexasAuthenticationError()
+
+        # TODO: figure out what LARES data is
+        soup = BeautifulSoup(resp.content)
+        form = soup.find_all('form')[0]
+        data = {}
+        for e in form.find_all('input'):
+            name = e.get('name')
+            if name: data[name] = e.get('value')
+
+        url = form.get('action')
+        self.session.post(url, data=data, verify=False)
+
         return resp
 
     def submit(self, url, data, method="GET"):
