@@ -3,6 +3,9 @@ import requests
 import datetime
 import re
 
+# Disable warnings for unverified connections
+requests.packages.urllib3.disable_warnings()
+
 class UTexasAuthenticationError(Exception): pass
 class UTexasUnsupportedRequest(Exception): pass
 class UTexasNonceNotFoundError(Exception): pass
@@ -14,6 +17,7 @@ class UTexas:
         "logon": "https://login.utexas.edu/openam/UI/Login",
         "registration": "https://utdirect.utexas.edu/registration/registration.WBX",
         "semester": "https://utdirect.utexas.edu/registration/chooseSemester.WBX",
+        "email": "https://utdirect.utexas.edu/registration/confirmEmailAddress.WBX"
     }
 
     def __init__(self, auth):
@@ -22,12 +26,15 @@ class UTexas:
         self.auth = auth
         self.DEBUG = True
 
-    def get_cdt(self):
-        now = datetime.datetime.now()
-        return now.strftime("%Y%m%d%H%M%S")
-
     def get_soup_text(self, soup, *args):
         return [m.text.lstrip().rstrip() for m in soup.find_all(*args)]
+
+    def get_form_fields(self, form):
+        data = {}
+        for e in form.find_all('input'):
+            name, value = e.get('name'), e.get('value')
+            if name and value: data[name] = value
+        return data
 
     def get_nonce(self, url):
         resp = self.session.get(url)
@@ -42,10 +49,7 @@ class UTexas:
         soup = BeautifulSoup(resp.content)
         options = []
         for form in soup.find_all('form'):
-            data = {}
-            for e in form.find_all('input'):
-                data[e.get('name')] = e.get('value')
-            options.append(data)
+            options.append(get_form_fields(form))
         for option in options:
             if 'submit' not in option: continue
             if season.lower() in option['submit'].lower():
@@ -83,6 +87,7 @@ class UTexas:
         
         notif = self.get_soup_text(soup, "span", {"class": "notification"})
         error = self.get_soup_text(soup, "span", {"class": "error"})
+        error += self.get_soup_text(soup, "form", {"action": "registrationAccessError.WBX"})
         if self.DEBUG:
             for msg in notif: print(msg)
             for msg in error: print(msg)
@@ -155,6 +160,22 @@ class UTexas:
         }
         self.get_nonce(self.url["semester"])
         return self.submit(self.url["registration"], data, "POST")
+
+    def STUOF(self):
+        """
+        """
+        data = {
+            's_request': 'STUOF',
+            'ack_dgre_plan': 'true'
+        }
+        resp = self.submit(self.url["email"], None, "GET")
+        soup = BeautifulSoup(resp.content)
+        for form in soup.find_all("form"):
+            d = get_form_fields(form)
+            if 'STUOF' in d.values():
+                data.update(d)
+        self.choose_semester()
+        return self.submit(self.url["email"], data, "POST")
 
     def choose_semester(self, semester="fall"):
         if "semester" not in self.__dict__:
