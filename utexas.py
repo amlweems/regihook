@@ -58,20 +58,12 @@ class UTexas:
         data = {
             "IDToken1": self.auth["username"],
             "IDToken2": self.auth["password"],
-            "goto": self.url["registration"],
         }
         resp = self.session.post(url, data=data, verify=False)
 
-        # TODO: figure out what LARES data is
-        soup = BeautifulSoup(resp.content)
-        form = soup.find_all('form')[0]
-        data = {}
-        for e in form.find_all('input'):
-            name = e.get('name')
-            if name: data[name] = e.get('value')
-
-        url = form.get('action')
-        self.session.post(url, data=data, verify=False)
+        cookies = {"utlogin-prod": self.session.cookies.get('utlogin-prod')}
+        self.session.cookies.clear()
+        self.session.cookies = requests.cookies.cookiejar_from_dict(cookies)
 
         return resp
 
