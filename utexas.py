@@ -49,7 +49,7 @@ class UTexas:
         soup = BeautifulSoup(resp.content)
         options = []
         for form in soup.find_all('form'):
-            options.append(get_form_fields(form))
+            options.append(self.get_form_fields(form))
         for option in options:
             if 'submit' not in option: continue
             if season.lower() in option['submit'].lower():
@@ -171,7 +171,7 @@ class UTexas:
         resp = self.submit(self.url["email"], None, "GET")
         soup = BeautifulSoup(resp.content)
         for form in soup.find_all("form"):
-            d = get_form_fields(form)
+            d = self.get_form_fields(form)
             if 'STUOF' in d.values():
                 data.update(d)
         self.choose_semester()
